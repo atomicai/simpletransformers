@@ -27,18 +27,12 @@ from transformers import (
 logger = logging.getLogger(__name__)
 
 if transformers.__version__ < "4.2.0":
-    shift_tokens_right = (
-        lambda input_ids, pad_token_id, decoder_start_token_id: _shift_tokens_right(
-            input_ids, pad_token_id
-        )
-    )
+    shift_tokens_right = lambda input_ids, pad_token_id, decoder_start_token_id: _shift_tokens_right(input_ids, pad_token_id)
 else:
     shift_tokens_right = _shift_tokens_right
 
 
-def preprocess_batch_for_hf_dataset(
-    dataset, encoder_tokenizer, decoder_tokenizer, args
-):
+def preprocess_batch_for_hf_dataset(dataset, encoder_tokenizer, decoder_tokenizer, args):
     if args.model_type == "bart":
         input_ids = encoder_tokenizer.batch_encode_plus(
             dataset["input_text"],
@@ -161,9 +155,7 @@ def load_hf_dataset(data, encoder_tokenizer, decoder_tokenizer, args):
             "csv",
             data_files=data,
             delimiter="\t",
-            download_mode="force_redownload"
-            if args.reprocess_input_data
-            else "reuse_dataset_if_exists",
+            download_mode="force_redownload" if args.reprocess_input_data else "reuse_dataset_if_exists",
             cache_dir=args.dataset_cache_dir,
         )
     else:
@@ -257,10 +249,7 @@ class Seq2SeqDataset(Dataset):
     def __init__(self, encoder_tokenizer, decoder_tokenizer, args, data, mode):
         cached_features_file = os.path.join(
             args.cache_dir,
-            args.model_name.replace("/", "_")
-            + "_cached_"
-            + str(args.max_seq_length)
-            + str(len(data)),
+            args.model_name.replace("/", "_") + "_cached_" + str(args.max_seq_length) + str(len(data)),
         )
 
         if os.path.exists(cached_features_file) and (
@@ -275,14 +264,10 @@ class Seq2SeqDataset(Dataset):
 
             data = [
                 (input_text, target_text, encoder_tokenizer, decoder_tokenizer, args)
-                for input_text, target_text in zip(
-                    data["input_text"], data["target_text"]
-                )
+                for input_text, target_text in zip(data["input_text"], data["target_text"])
             ]
 
-            if (mode == "train" and args.use_multiprocessing) or (
-                mode == "dev" and args.use_multiprocessing_for_evaluation
-            ):
+            if (mode == "train" and args.use_multiprocessing) or (mode == "dev" and args.use_multiprocessing_for_evaluation):
                 if args.multiprocessing_chunksize == -1:
                     chunksize = max(len(data) // (args.process_count * 2), 500)
                 else:
@@ -297,14 +282,10 @@ class Seq2SeqDataset(Dataset):
                         )
                     )
             else:
-                self.examples = [
-                    preprocess_data(d) for d in tqdm(data, disable=args.silent)
-                ]
+                self.examples = [preprocess_data(d) for d in tqdm(data, disable=args.silent)]
 
             if not args.no_cache:
-                logger.info(
-                    " Saving features into cached file %s", cached_features_file
-                )
+                logger.info(" Saving features into cached file %s", cached_features_file)
                 with open(cached_features_file, "wb") as handle:
                     pickle.dump(self.examples, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
@@ -349,7 +330,8 @@ def preprocess_data_mbart(data):
         tgt_texts=[target_text],
         src_lang=args.src_lang,
         tgt_lang=args.tgt_lang,
-        max_length=args.max_seq_length,
+        max_length=args.max_length,
+        max_target_length=args.max_seq_length,
         padding="max_length",  # pad_to_max_length=True won't work in this case
         return_tensors="pt",
         truncation=True,
@@ -394,20 +376,12 @@ class SimpleSummarizationDataset(Dataset):
 
             data = [
                 (input_text, target_text, tokenizer, args)
-                for input_text, target_text in zip(
-                    data["input_text"], data["target_text"]
-                )
+                for input_text, target_text in zip(data["input_text"], data["target_text"])
             ]
 
-            preprocess_fn = (
-                preprocess_data_mbart
-                if args.model_type == "mbart"
-                else preprocess_data_bart
-            )
+            preprocess_fn = preprocess_data_mbart if args.model_type in ("mbart", "mbart50") else preprocess_data_bart
 
-            if (mode == "train" and args.use_multiprocessing) or (
-                mode == "dev" and args.use_multiprocessing_for_evaluation
-            ):
+            if (mode == "train" and args.use_multiprocessing) or (mode == "dev" and args.use_multiprocessing_for_evaluation):
                 if args.multiprocessing_chunksize == -1:
                     chunksize = max(len(data) // (args.process_count * 2), 500)
                 else:
@@ -422,9 +396,7 @@ class SimpleSummarizationDataset(Dataset):
                         )
                     )
             else:
-                self.examples = [
-                    preprocess_fn(d) for d in tqdm(data, disable=args.silent)
-                ]
+                self.examples = [preprocess_fn(d) for d in tqdm(data, disable=args.silent)]
 
     def __len__(self):
         return len(self.examples)
@@ -439,25 +411,19 @@ def split_text(text, n=100, character=" "):
     return [character.join(text[i : i + n]).strip() for i in range(0, len(text), n)]
 
 
-def split_documents(
-    documents, split_text_n=100, split_text_character=" ", include_title=True
-):
+def split_documents(documents, split_text_n=100, split_text_character=" ", include_title=True):
     """Split documents into passages"""
     titles, texts = [], []
     if include_title:
         for title, text in zip(documents["title"], documents["text"]):
             if text is not None:
-                for passage in split_text(
-                    text, n=split_text_n, character=split_text_character
-                ):
+                for passage in split_text(text, n=split_text_n, character=split_text_character):
                     titles.append(title if title is not None else "")
                     texts.append(passage)
     else:
         for text in documents["text"]:
             if text is not None:
-                for passage in split_text(
-                    text, n=split_text_n, character=split_text_character
-                ):
+                for passage in split_text(text, n=split_text_n, character=split_text_character):
                     titles.append("")
                     texts.append(passage)
     return {"title": titles, "text": texts}
@@ -472,9 +438,7 @@ def embed(documents, ctx_encoder, ctx_tokenizer, device):
         padding="longest",
         return_tensors="pt",
     )["input_ids"]
-    embeddings = ctx_encoder(
-        input_ids.to(device=device), return_dict=True
-    ).pooler_output
+    embeddings = ctx_encoder(input_ids.to(device=device), return_dict=True).pooler_output
     return {"embeddings": embeddings.detach().cpu().numpy()}
 
 
@@ -526,9 +490,7 @@ def generate_faiss_index_dataset(data, ctx_encoder_name, args, device):
         }
     )  # optional, save as float32 instead of float64 to save space
     dataset = dataset.map(
-        partial(
-            embed, ctx_encoder=ctx_encoder, ctx_tokenizer=ctx_tokenizer, device=device
-        ),
+        partial(embed, ctx_encoder=ctx_encoder, ctx_tokenizer=ctx_tokenizer, device=device),
         batched=True,
         batch_size=args.rag_embed_batch_size,
         features=new_features,
