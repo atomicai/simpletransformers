@@ -4,6 +4,9 @@
 # Wandb
 wandb/
 
+# OSX
+.DS_Store/*
+
 # Outputs from examples
 **/cache_dir
 **/runs
