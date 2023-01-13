@@ -7,6 +7,9 @@ wandb/
 # OSX
 .DS_Store/*
 
+# Jupyter Notebook ckpt
+.ipynb_checkpoints/*
+
 # Outputs from examples
 **/cache_dir
 **/runs
